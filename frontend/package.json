@@ -1,0 +1,20 @@
+{
+  "name": "netwatch-frontend",
+  "version": "1.0.0",
+  "description": "NetWatch - AWS Network Traffic Monitoring Dashboard",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "^5.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "npm run build && aws s3 sync dist/ s3://netwatch-frontend-${BUCKET_SUFFIX} --delete"
+  }
+}

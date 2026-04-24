@@ -1,0 +1,458 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  NetWatch - Network Traffic Monitoring Tool
+  Uses 13 AWS services: VPC, S3, Kinesis, Lambda, DynamoDB, CloudWatch,
+  SNS, GuardDuty, WAF, Shield, Macie, Athena, API Gateway, CloudFront
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Default: admin@example.com
+    Description: Email for SNS alert notifications
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+  BucketSuffix:
+    Type: String
+    Default: netwatch-001
+    Description: Unique suffix for S3 bucket names
+
+Resources:
+
+  # ─────────────────────────────────────────────────────────
+  # 1. VPC & NETWORKING
+  # ─────────────────────────────────────────────────────────
+  NetWatchVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: netwatch-vpc
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref NetWatchVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags: [{Key: Name, Value: netwatch-public-1}]
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref NetWatchVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags: [{Key: Name, Value: netwatch-public-2}]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref NetWatchVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref NetWatchVPC
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # VPC Flow Logs
+  VPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: netwatch-vpc-flowlog-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: vpc-flow-logs.amazonaws.com}
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: FlowLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: '*'
+
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceId: !Ref NetWatchVPC
+      ResourceType: VPC
+      TrafficType: ALL
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
+      LogGroupName: /netwatch/vpc-flow-logs
+      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}'
+
+  # ─────────────────────────────────────────────────────────
+  # 2. S3 BUCKETS
+  # ─────────────────────────────────────────────────────────
+  FlowLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub netwatch-flow-logs-${BucketSuffix}
+      VersioningConfiguration: {Status: Enabled}
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveOldLogs
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+            ExpirationInDays: 365
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub netwatch-frontend-${BucketSuffix}
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+
+  # ─────────────────────────────────────────────────────────
+  # 3. KINESIS DATA STREAM
+  # ─────────────────────────────────────────────────────────
+  TrafficStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: net-traffic-stream
+      ShardCount: 1
+      RetentionPeriodHours: 24
+
+  # ─────────────────────────────────────────────────────────
+  # 4. DYNAMODB TABLE
+  # ─────────────────────────────────────────────────────────
+  TrafficLogsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: netwatch-traffic-logs
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - {AttributeName: log_id, AttributeType: S}
+        - {AttributeName: timestamp, AttributeType: S}
+      KeySchema:
+        - {AttributeName: log_id, KeyType: HASH}
+        - {AttributeName: timestamp, KeyType: RANGE}
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ─────────────────────────────────────────────────────────
+  # 5. SNS TOPIC
+  # ─────────────────────────────────────────────────────────
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: netwatch-alerts
+      DisplayName: NetWatch Security Alerts
+
+  AlertsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  # ─────────────────────────────────────────────────────────
+  # 6. LAMBDA - IAM ROLE
+  # ─────────────────────────────────────────────────────────
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: netwatch-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: lambda.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+      Policies:
+        - PolicyName: NetWatchLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:PutItem, dynamodb:GetItem, dynamodb:Scan, dynamodb:Query]
+                Resource: !GetAtt TrafficLogsTable.Arn
+              - Effect: Allow
+                Action: [sns:Publish]
+                Resource: !Ref AlertsTopic
+              - Effect: Allow
+                Action: [cloudwatch:PutMetricData, cloudwatch:GetMetricStatistics]
+                Resource: '*'
+              - Effect: Allow
+                Action: [guardduty:ListDetectors, guardduty:ListFindings, guardduty:GetFindings]
+                Resource: '*'
+              - Effect: Allow
+                Action: [athena:StartQueryExecution, athena:GetQueryExecution, athena:GetQueryResults]
+                Resource: '*'
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub '${FlowLogsBucket.Arn}/*'
+
+  # ─────────────────────────────────────────────────────────
+  # 7. LAMBDA FUNCTIONS
+  # ─────────────────────────────────────────────────────────
+  TrafficProcessorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: net-traffic-processor
+      Runtime: python3.12
+      Handler: traffic_processor.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref AlertsTopic
+          DYNAMO_TABLE: !Ref TrafficLogsTable
+          ALERT_THRESHOLD_BYTES: '10000000'
+          FAILED_AUTH_THRESHOLD: '100'
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': 'placeholder - deploy from repo'}
+
+  KinesisTrigger:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt TrafficStream.Arn
+      FunctionName: !GetAtt TrafficProcessorLambda.Arn
+      StartingPosition: LATEST
+      BatchSize: 100
+      BisectBatchOnFunctionError: true
+
+  ApiLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: netwatch-api
+      Runtime: python3.12
+      Handler: api_handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          DYNAMO_TABLE: !Ref TrafficLogsTable
+          ATHENA_DATABASE: netwatch_db
+          ATHENA_OUTPUT: !Sub 's3://${FlowLogsBucket}/athena-results/'
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': 'placeholder - deploy from repo'}
+
+  # ─────────────────────────────────────────────────────────
+  # 8. API GATEWAY
+  # ─────────────────────────────────────────────────────────
+  NetWatchApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: netwatch-api
+      Description: NetWatch Traffic Monitor REST API
+
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref NetWatchApi
+      ParentId: !GetAtt NetWatchApi.RootResourceId
+      PathPart: '{proxy+}'
+
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref NetWatchApi
+      ResourceId: !Ref ApiResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApiLambda.Arn}/invocations'
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiMethod
+    Properties:
+      RestApiId: !Ref NetWatchApi
+      StageName: prod
+
+  ApiLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${NetWatchApi}/*'
+
+  # ─────────────────────────────────────────────────────────
+  # 9. CLOUDWATCH DASHBOARD & ALARMS
+  # ─────────────────────────────────────────────────────────
+  NetWatchDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: NetWatch-Traffic-Monitor
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Traffic Bytes Processed",
+                "metrics": [["NetWatch/Traffic", "BytesProcessed"]],
+                "period": 300,
+                "stat": "Sum"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Log Records Processed",
+                "metrics": [["NetWatch/Traffic", "LogRecordsProcessed"]],
+                "period": 300,
+                "stat": "Sum"
+              }
+            }
+          ]
+        }
+
+  HighTrafficAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: netwatch-high-traffic
+      AlarmDescription: Traffic spike detected
+      MetricName: BytesProcessed
+      Namespace: NetWatch/Traffic
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 50000000
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: [!Ref AlertsTopic]
+
+  # ─────────────────────────────────────────────────────────
+  # 10. CLOUDFRONT DISTRIBUTION
+  # ─────────────────────────────────────────────────────────
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - DomainName: !GetAtt FrontendBucket.DomainName
+            Id: S3FrontendOrigin
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          ViewerProtocolPolicy: redirect-to-https
+          TargetOriginId: S3FrontendOrigin
+          ForwardedValues:
+            QueryString: false
+            Cookies: {Forward: none}
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+
+  # ─────────────────────────────────────────────────────────
+  # 11. WAF WEB ACL
+  # ─────────────────────────────────────────────────────────
+  NetWatchWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: netwatch-webacl
+      Scope: REGIONAL
+      DefaultAction: {Allow: {}}
+      Rules:
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 1
+          OverrideAction: {None: {}}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRules
+        - Name: AWSManagedRulesSQLiRuleSet
+          Priority: 2
+          OverrideAction: {None: {}}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: SQLiRules
+        - Name: RateLimitRule
+          Priority: 3
+          Action: {Block: {}}
+          Statement:
+            RateBasedStatement:
+              Limit: 2000
+              AggregateKeyType: IP
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimit
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: NetWatchWebACL
+
+Outputs:
+  VpcId:
+    Value: !Ref NetWatchVPC
+    Export: {Name: NetWatch-VPC-ID}
+
+  FlowLogsBucketName:
+    Value: !Ref FlowLogsBucket
+    Export: {Name: NetWatch-FlowLogs-Bucket}
+
+  KinesisStreamName:
+    Value: !Ref TrafficStream
+    Export: {Name: NetWatch-Kinesis-Stream}
+
+  ApiGatewayUrl:
+    Value: !Sub 'https://${NetWatchApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export: {Name: NetWatch-API-URL}
+
+  CloudFrontUrl:
+    Value: !GetAtt CloudFrontDistribution.DomainName
+    Export: {Name: NetWatch-Frontend-URL}
+
+  SNSTopicArn:
+    Value: !Ref AlertsTopic
+    Export: {Name: NetWatch-SNS-Topic}
+
+  DynamoTableName:
+    Value: !Ref TrafficLogsTable
+    Export: {Name: NetWatch-DynamoDB-Table}
