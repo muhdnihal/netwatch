@@ -14,19 +14,84 @@ function ToggleRow({ name, desc, initial }) {
 }
 
 const AWS_SERVICES = [
-  { name: "VPC Flow Logs", status: "active", region: "us-east-1", arn: "arn:aws:logs:us-east-1:123456789:log-group:/vpc/flow-logs" },
-  { name: "GuardDuty", status: "active", region: "us-east-1", arn: "arn:aws:guardduty:us-east-1:123456789:detector/abc123" },
-  { name: "AWS Shield Advanced", status: "active", region: "global", arn: "arn:aws:shield::123456789:protection/def456" },
-  { name: "AWS WAF", status: "active", region: "us-east-1", arn: "arn:aws:wafv2:us-east-1:123456789:webacl/netwatch-acl" },
-  { name: "Amazon Macie", status: "active", region: "us-east-1", arn: "arn:aws:macie2:us-east-1:123456789:session" },
-  { name: "AWS Security Hub", status: "active", region: "us-east-1", arn: "arn:aws:securityhub:us-east-1:123456789:hub/default" },
-  { name: "Amazon Kinesis", status: "active", region: "us-east-1", arn: "arn:aws:kinesis:us-east-1:123456789:stream/net-traffic-stream" },
-  { name: "CloudWatch", status: "active", region: "us-east-1", arn: "arn:aws:cloudwatch:us-east-1:123456789:dashboard/NetWatch" },
-  { name: "AWS Lambda", status: "active", region: "us-east-1", arn: "arn:aws:lambda:us-east-1:123456789:function:net-traffic-processor" },
-  { name: "Amazon SNS", status: "active", region: "us-east-1", arn: "arn:aws:sns:us-east-1:123456789:netwatch-alerts" },
-  { name: "Amazon S3", status: "active", region: "us-east-1", arn: "arn:aws:s3:::netwatch-flow-logs-bucket" },
-  { name: "Amazon Athena", status: "active", region: "us-east-1", arn: "arn:aws:athena:us-east-1:123456789:workgroup/netwatch" },
-  { name: "AWS CloudFront", status: "active", region: "global", arn: "arn:aws:cloudfront::123456789:distribution/E1ABCDEF" },
+  { 
+    name: "VPC Flow Logs", 
+    status: "active", 
+    region: "eu-north-1", 
+    arn: "arn:aws:logs:eu-north-1:800080992729:log-group:/netwatch/vpc-flow-logs" 
+  },
+  { 
+    name: "GuardDuty", 
+    status: "active", 
+    region: "eu-north-1", 
+    arn: "arn:aws:guardduty:eu-north-1:800080992729:detector/abc123" 
+  },
+  { 
+    name: "AWS Config", 
+    status: "active", 
+    region: "eu-north-1", 
+    arn: "arn:aws:config:eu-north-1:800080992729:config-rule/netwatch-config" 
+  },
+  { 
+    name: "Shield Standard", 
+    status: "active", 
+    region: "global", 
+    arn: "arn:aws:shield::800080992729:protection/netwatch" 
+  },
+  { 
+    name: "Amazon SQS", 
+    status: "active", 
+    region: "eu-north-1", 
+    arn: "arn:aws:sqs:eu-north-1:800080992729:netwatch-traffic-queue" 
+  },
+  { 
+    name: "CloudWatch", 
+    status: "active", 
+    region: "eu-north-1", 
+    arn: "arn:aws:cloudwatch:eu-north-1:800080992729:dashboard/NetWatch-Traffic-Monitor" 
+  },
+  { 
+    name: "AWS Lambda", 
+    status: "active", 
+    region: "eu-north-1", 
+    arn: "arn:aws:lambda:eu-north-1:800080992729:function:net-traffic-processor" 
+  },
+  { 
+    name: "Amazon SNS", 
+    status: "active", 
+    region: "eu-north-1", 
+    arn: "arn:aws:sns:eu-north-1:800080992729:netwatch-alerts" 
+  },
+  { 
+    name: "Amazon S3", 
+    status: "active", 
+    region: "eu-north-1", 
+    arn: "arn:aws:s3:::netwatch-flow-logs-nihal-2026" 
+  },
+  { 
+    name: "Amazon Athena", 
+    status: "active", 
+    region: "eu-north-1", 
+    arn: "arn:aws:athena:eu-north-1:800080992729:workgroup/netwatch" 
+  },
+  { 
+    name: "AWS CloudFront", 
+    status: "active", 
+    region: "global", 
+    arn: "arn:aws:cloudfront::800080992729:distribution/ADD-AFTER-CREATED" 
+  },
+  { 
+    name: "API Gateway", 
+    status: "active", 
+    region: "eu-north-1", 
+    arn: "arn:aws:apigateway:eu-north-1::/restapis/ADD-AFTER-CREATED" 
+  },
+  { 
+    name: "DynamoDB", 
+    status: "active", 
+    region: "eu-north-1", 
+    arn: "arn:aws:dynamodb:eu-north-1:800080992729:table/netwatch-traffic-logs" 
+  },
 ];
 
 export default function Settings() {
