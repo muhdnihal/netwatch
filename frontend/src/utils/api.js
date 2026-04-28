@@ -1,3 +1,4 @@
+// API utility - connects to your real AWS API Gateway
 const API_URL = "https://41ugiuyys3.execute-api.eu-north-1.amazonaws.com/prod";
 
 export async function fetchLogs() {
