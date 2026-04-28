@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-const API_URL = "https://bl38xozute.execute-api.eu-north-1.amazonaws.com/prod";
+const API_URL = "https://41ugiuyys3.execute-api.eu-north-1.amazonaws.com/prod";
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 function useInterval(cb, ms) {
