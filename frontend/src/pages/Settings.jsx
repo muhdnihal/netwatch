@@ -221,34 +221,7 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* How to send test data */}
-      <div className="card section-gap"
-        style={{ borderColor:"rgba(0,212,255,0.2)" }}>
-        <div className="card-header">
-          <div className="card-title" style={{ color:"var(--accent-cyan)" }}>
-            How to Generate Real Monitoring Data
-          </div>
-        </div>
-        <div style={{ fontSize:"12px", color:"var(--text-secondary)",
-                      lineHeight:"2" }}>
-          <div>1. Go to <strong style={{ color:"var(--accent-cyan)" }}>
-            AWS Console → SQS → netwatch-traffic-queue
-          </strong></div>
-          <div>2. Click <strong>"Send and receive messages"</strong></div>
-          <div>3. Paste this in message body and click Send:</div>
-          <div className="code-snippet" style={{
-            background:"var(--bg-deep)", padding:"10px",
-            borderRadius:"6px", fontFamily:"monospace",
-            fontSize:"11px", marginTop:"8px",
-            border:"1px solid var(--border-dim)"
-          }}>
-            {`{"srcaddr":"192.168.1.1","dstaddr":"10.0.0.1","srcport":1234,"dstport":443,"protocol":"TCP","bytes":9000,"action":"ALLOW"}`}
-          </div>
-          <div style={{ marginTop:"8px" }}>
-            4. Wait 30 seconds → Dashboard and Flow Logs will update automatically!
-          </div>
-        </div>
-      </div>
+    
 
       {/* Danger Zone */}
       <div className="card"
