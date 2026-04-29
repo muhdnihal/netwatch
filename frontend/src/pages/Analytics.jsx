@@ -1,17 +1,18 @@
-import { useState } from "react";
-
-const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
-
-const METRIC_DATA = {
-  latency: [12, 18, 14, 22, 19, 31, 45, 28, 16, 13, 20, 24],
-  packets: [88, 94, 72, 85, 110, 130, 99, 87, 102, 115, 93, 88],
-  errors: [0, 1, 0, 2, 0, 0, 3, 1, 0, 0, 2, 1],
-  bandwidth: [1.2, 1.8, 2.3, 1.9, 3.1, 2.8, 2.4, 1.6, 1.3, 2.0, 2.7, 3.2],
-};
+import { useState, useEffect } from "react";
+import { fetchLogs, fetchMetrics, fetchQueueStats } from "../utils/api";
 
 function LineChart({ data, color, unit, label }) {
-  const max = Math.max(...data);
-  const min = Math.min(...data);
+  if (!data || data.length === 0) {
+    return (
+      <div style={{ height:"80px", display:"flex", alignItems:"center",
+                    justifyContent:"center", color:"var(--text-muted)",
+                    fontSize:"12px" }}>
+        No data yet — send messages to SQS to generate metrics
+      </div>
+    );
+  }
+  const max   = Math.max(...data);
+  const min   = Math.min(...data);
   const range = max - min || 1;
   const W = 100, H = 60;
   const pts = data.map((v, i) => {
@@ -19,180 +20,298 @@ function LineChart({ data, color, unit, label }) {
     const y = H - ((v - min) / range) * (H - 8) - 4;
     return `${x},${y}`;
   });
-
   return (
     <div>
-      <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "8px" }}>{label}</div>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        style={{ width: "100%", height: "80px", overflow: "visible" }}
-        preserveAspectRatio="none"
-      >
+      <div style={{ fontSize:"11px", color:"var(--text-muted)",
+                    marginBottom:"8px" }}>{label}</div>
+      <svg viewBox={`0 0 ${W} ${H}`}
+        style={{ width:"100%", height:"80px", overflow:"visible" }}
+        preserveAspectRatio="none">
         <defs>
-          <linearGradient id={`grad-${color}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          <linearGradient id={`grad-${color.replace('#','')}`}
+            x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor={color} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={color} stopOpacity="0"   />
           </linearGradient>
         </defs>
-        <polyline
-          points={pts.join(" ")}
-          fill="none"
-          stroke={color}
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
+        <polyline points={pts.join(" ")} fill="none"
+          stroke={color} strokeWidth="1.5" strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke" />
         <polygon
           points={`0,${H} ${pts.join(" ")} ${W},${H}`}
-          fill={`url(#grad-${color})`}
-        />
+          fill={`url(#grad-${color.replace('#','')})`} />
         {data.map((v, i) => {
           const [x, y] = pts[i].split(",");
-          return <circle key={i} cx={x} cy={y} r="2" fill={color} vectorEffect="non-scaling-stroke" />;
+          return <circle key={i} cx={x} cy={y} r="2"
+            fill={color} vectorEffect="non-scaling-stroke" />;
         })}
       </svg>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
-        <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>00:00</span>
-        <span style={{ fontSize: "10px", color, fontWeight: "700" }}>
-          {data[data.length - 1]}{unit}
+      <div style={{ display:"flex", justifyContent:"space-between",
+                    marginTop:"4px" }}>
+        <span style={{ fontSize:"10px", color:"var(--text-muted)" }}>
+          oldest
         </span>
-        <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>23:00</span>
+        <span style={{ fontSize:"10px", color, fontWeight:"700" }}>
+          {data[data.length-1]}{unit}
+        </span>
+        <span style={{ fontSize:"10px", color:"var(--text-muted)" }}>
+          latest
+        </span>
       </div>
     </div>
   );
 }
 
-const TOP_ENDPOINTS = [
-  { path: "/api/v2/users", calls: "84,210", latency: "12ms", color: "var(--accent-cyan)" },
-  { path: "/api/v2/events", calls: "61,330", latency: "18ms", color: "var(--accent-green)" },
-  { path: "/health", calls: "48,900", latency: "3ms", color: "var(--accent-purple)" },
-  { path: "/api/v1/auth", calls: "33,440", latency: "44ms", color: "var(--accent-orange)" },
-  { path: "/api/v2/metrics", calls: "22,100", latency: "29ms", color: "var(--accent-yellow)" },
-];
-
-const INSTANCE_DATA = [
-  { id: "i-0a1b2c3d", type: "t3.medium", az: "us-east-1a", cpu: 68, net: "1.2 GB/s" },
-  { id: "i-0e4f5g6h", type: "t3.medium", az: "us-east-1b", cpu: 42, net: "0.8 GB/s" },
-  { id: "i-0i7j8k9l", type: "t3.large", az: "us-east-1c", cpu: 81, net: "2.1 GB/s" },
-  { id: "i-0m1n2o3p", type: "t3.large", az: "us-east-1a", cpu: 23, net: "0.4 GB/s" },
-];
-
 export default function Analytics() {
-  const [activeMetric, setActiveMetric] = useState("bandwidth");
+  const [logs,       setLogs]       = useState([]);
+  const [metrics,    setMetrics]    = useState({});
+  const [queueStats, setQueueStats] = useState({});
+  const [loading,    setLoading]    = useState(true);
 
-  const metrics = [
-    { key: "bandwidth", label: "Bandwidth GB/s", color: "#00d4ff", unit: " GB/s" },
-    { key: "latency", label: "Avg Latency ms", color: "#00ff9d", unit: "ms" },
-    { key: "packets", label: "Packets K/s", color: "#bd00ff", unit: "K" },
-    { key: "errors", label: "Error Rate", color: "#ff3366", unit: "%" },
-  ];
+  useEffect(() => {
+    const load = async () => {
+      const [l, m, q] = await Promise.all([
+        fetchLogs(), fetchMetrics(), fetchQueueStats()
+      ]);
+      setLogs(l);
+      setMetrics(m);
+      setQueueStats(q);
+      setLoading(false);
+    };
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Build charts from real logs
+  const bytesList  = logs.map(l => parseInt(l.bytes  || 0));
+  const allowCount = logs.filter(l =>
+    (l.action||"").toUpperCase() === "ALLOW").length;
+  const denyCount  = logs.filter(l =>
+    ["DENY","REJECT"].includes((l.action||"").toUpperCase())).length;
+  const totalBytes = bytesList.reduce((s, b) => s + b, 0);
+  const avgBytes   = logs.length ? Math.round(totalBytes / logs.length) : 0;
+
+  // Protocol breakdown from real logs
+  const protocolMap = {};
+  logs.forEach(l => {
+    const p = l.protocol || "OTHER";
+    protocolMap[p] = (protocolMap[p] || 0) + 1;
+  });
+  const protocols = Object.entries(protocolMap)
+    .map(([name, count]) => ({
+      name,
+      pct: logs.length ? Math.round((count / logs.length) * 100) : 0
+    }))
+    .sort((a, b) => b.pct - a.pct);
+
+  // Port breakdown
+  const portMap = {};
+  logs.forEach(l => {
+    const p = l.dst_port || "other";
+    portMap[p] = (portMap[p] || 0) + 1;
+  });
+  const topPorts = Object.entries(portMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  // Bytes chart data
+  const bytesChartData = bytesList.length > 0
+    ? bytesList.slice(-12)
+    : [];
+
+  // CloudWatch metrics data
+  const cwBytes = metrics.BytesProcessed
+    ? (Array.isArray(metrics.BytesProcessed)
+        ? metrics.BytesProcessed.map(d => d.Sum || 0)
+        : [])
+    : [];
+  const cwRecords = metrics.LogRecordsProcessed
+    ? (Array.isArray(metrics.LogRecordsProcessed)
+        ? metrics.LogRecordsProcessed.map(d => d.Sum || 0)
+        : [])
+    : [];
 
   return (
     <div>
       <div className="page-header">
         <div className="breadcrumb">NetWatch <span>/</span> Analytics</div>
         <div className="page-title">Traffic <span>Analytics</span></div>
-        <div className="page-subtitle">CloudWatch · X-Ray · Kinesis · Athena · QuickSight</div>
-      </div>
-
-      {/* Metric selector */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-        {metrics.map(m => (
-          <button
-            key={m.key}
-            className={`btn ${activeMetric === m.key ? "btn-primary" : "btn-outline"}`}
-            style={{ padding: "6px 14px", fontSize: "11px" }}
-            onClick={() => setActiveMetric(m.key)}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Main metric chart */}
-      <div className="card section-gap">
-        <div className="card-header">
-          <div className="card-title">
-            {metrics.find(m => m.key === activeMetric)?.label} — 24h View
-          </div>
-          <div className="card-badge live">CloudWatch Metrics</div>
+        <div className="page-subtitle">
+          Real data · DynamoDB · CloudWatch · SQS · eu-north-1
         </div>
-        {metrics.filter(m => m.key === activeMetric).map(m => (
-          <LineChart
-            key={m.key}
-            data={METRIC_DATA[m.key]}
-            color={m.color}
-            unit={m.unit}
-            label={`Hourly ${m.label}`}
-          />
-        ))}
       </div>
 
-      {/* Mini metric cards */}
+      {/* Summary stats */}
       <div className="grid-4 section-gap">
-        {metrics.map(m => (
-          <div className="card" key={m.key} style={{ cursor: "pointer" }} onClick={() => setActiveMetric(m.key)}>
-            <div className="card-title" style={{ marginBottom: "12px" }}>{m.label}</div>
-            <LineChart
-              data={METRIC_DATA[m.key]}
-              color={m.color}
-              unit={m.unit}
-              label=""
-            />
+        <div className="stat-card cyan">
+          <div className="stat-label">Total Records</div>
+          <div className="stat-value">{loading ? "..." : logs.length}</div>
+          <div className="stat-sub">From DynamoDB</div>
+        </div>
+        <div className="stat-card green">
+          <div className="stat-label">Allowed</div>
+          <div className="stat-value">{loading ? "..." : allowCount}</div>
+          <div className="stat-sub">ALLOW actions</div>
+        </div>
+        <div className="stat-card red">
+          <div className="stat-label">Blocked</div>
+          <div className="stat-value">{loading ? "..." : denyCount}</div>
+          <div className="stat-sub">DENY/REJECT</div>
+        </div>
+        <div className="stat-card orange">
+          <div className="stat-label">Avg Bytes</div>
+          <div className="stat-value">
+            {loading ? "..." : `${(avgBytes/1000).toFixed(1)}K`}
           </div>
-        ))}
+          <div className="stat-sub">Per record</div>
+        </div>
       </div>
 
       <div className="grid-2 section-gap">
-        {/* Top Endpoints */}
+        {/* Bytes chart */}
         <div className="card">
           <div className="card-header">
-            <div className="card-title">Top API Endpoints</div>
-            <div className="card-badge live">X-Ray Traces</div>
+            <div className="card-title">Bytes Per Log Record</div>
+            <div className="card-badge live">Real DynamoDB Data</div>
           </div>
-          <div>
-            {TOP_ENDPOINTS.map((e, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: "10px", alignItems: "center", padding: "8px 0", borderBottom: i < TOP_ENDPOINTS.length - 1 ? "1px solid var(--border-dim)" : "none" }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: e.color }}>{e.path}</div>
-                <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>{e.calls}</div>
-                <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{e.latency}</div>
-              </div>
-            ))}
-          </div>
+          <LineChart
+            data={bytesChartData}
+            color="#00d4ff"
+            unit=" B"
+            label="Bytes per record (latest 12)"
+          />
         </div>
 
-        {/* EC2 Instances */}
+        {/* CloudWatch metrics */}
         <div className="card">
           <div className="card-header">
-            <div className="card-title">EC2 Instance Traffic</div>
-            <div className="card-badge live">CloudWatch</div>
+            <div className="card-title">CloudWatch — Bytes Processed</div>
+            <div className="card-badge live">CloudWatch Metrics</div>
           </div>
-          <div>
-            {INSTANCE_DATA.map((inst, i) => (
-              <div key={i} style={{ padding: "10px 0", borderBottom: i < INSTANCE_DATA.length - 1 ? "1px solid var(--border-dim)" : "none" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                  <span style={{ fontSize: "11px", color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>{inst.id}</span>
-                  <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>{inst.type} · {inst.az}</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 60px", gap: "8px", alignItems: "center" }}>
+          <LineChart
+            data={cwBytes}
+            color="#00ff9d"
+            unit=" B"
+            label="Total bytes processed per hour"
+          />
+        </div>
+      </div>
+
+      <div className="grid-2 section-gap">
+        {/* Protocol breakdown */}
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">Protocol Distribution</div>
+            <div className="card-badge live">Real Data</div>
+          </div>
+          {protocols.length === 0 ? (
+            <div className="empty-state">
+              <div className="icon">📊</div>
+              Send SQS messages to see protocol data
+            </div>
+          ) : (
+            <div className="protocol-grid">
+              {protocols.map((p, i) => {
+                const colors = ["#00d4ff","#00ff9d","#ff6b35","#bd00ff","#ffd700"];
+                return (
+                  <div key={i} className="protocol-row">
+                    <div className="protocol-name">{p.name}</div>
+                    <div className="proto-track">
+                      <div className="proto-fill"
+                        style={{ width:`${p.pct}%`,
+                                 background: colors[i % colors.length] }} />
+                    </div>
+                    <div className="protocol-pct">{p.pct}%</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Top ports */}
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">Top Destination Ports</div>
+            <div className="card-badge live">Real Data</div>
+          </div>
+          {topPorts.length === 0 ? (
+            <div className="empty-state">
+              <div className="icon">🔌</div>
+              Send SQS messages to see port data
+            </div>
+          ) : (
+            <div>
+              {topPorts.map(([port, count], i) => (
+                <div key={i} style={{
+                  display:"grid",
+                  gridTemplateColumns:"80px 1fr 60px",
+                  gap:"10px", alignItems:"center",
+                  padding:"8px 0",
+                  borderBottom: i < topPorts.length-1
+                    ? "1px solid var(--border-dim)" : "none"
+                }}>
+                  <div style={{ fontSize:"12px",
+                                color:"var(--accent-cyan)" }}>
+                    Port {port}
+                  </div>
                   <div className="proto-track">
-                    <div
-                      className="proto-fill"
-                      style={{
-                        width: `${inst.cpu}%`,
-                        background: inst.cpu > 70 ? "var(--accent-orange)" : "linear-gradient(90deg, var(--accent-green), var(--accent-cyan))"
-                      }}
-                    />
+                    <div className="proto-fill" style={{
+                      width:`${Math.round((count/logs.length)*100)}%`,
+                      background:"linear-gradient(90deg,#00d4ff,#0d7bb5)"
+                    }} />
                   </div>
-                  <div style={{ fontSize: "10px", color: "var(--text-muted)", textAlign: "right" }}>
-                    CPU {inst.cpu}%
+                  <div style={{ fontSize:"11px",
+                                color:"var(--text-muted)",
+                                textAlign:"right" }}>
+                    {count} hits
                   </div>
                 </div>
-                <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px" }}>
-                  Net: <span style={{ color: "var(--accent-cyan)" }}>{inst.net}</span>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* SQS Stats */}
+      <div className="card section-gap">
+        <div className="card-header">
+          <div className="card-title">SQS Queue Statistics</div>
+          <div className="card-badge live">Real-time</div>
+        </div>
+        <div className="grid-4">
+          <div style={{ padding:"14px", background:"var(--bg-deep)",
+                        borderRadius:"8px", border:"1px solid var(--border-dim)" }}>
+            <div className="stat-label">Messages Available</div>
+            <div style={{ fontSize:"24px", fontWeight:"800",
+                          color:"var(--accent-cyan)" }}>
+              {queueStats.messages_available || 0}
+            </div>
+          </div>
+          <div style={{ padding:"14px", background:"var(--bg-deep)",
+                        borderRadius:"8px", border:"1px solid var(--border-dim)" }}>
+            <div className="stat-label">Messages In-Flight</div>
+            <div style={{ fontSize:"24px", fontWeight:"800",
+                          color:"var(--accent-orange)" }}>
+              {queueStats.messages_inflight || 0}
+            </div>
+          </div>
+          <div style={{ padding:"14px", background:"var(--bg-deep)",
+                        borderRadius:"8px", border:"1px solid var(--border-dim)" }}>
+            <div className="stat-label">Total Bytes Stored</div>
+            <div style={{ fontSize:"24px", fontWeight:"800",
+                          color:"var(--accent-green)" }}>
+              {(totalBytes/1000).toFixed(1)}KB
+            </div>
+          </div>
+          <div style={{ padding:"14px", background:"var(--bg-deep)",
+                        borderRadius:"8px", border:"1px solid var(--border-dim)" }}>
+            <div className="stat-label">CloudWatch Records</div>
+            <div style={{ fontSize:"24px", fontWeight:"800",
+                          color:"var(--accent-purple)" }}>
+              {cwRecords.reduce((s,v) => s+v, 0)}
+            </div>
           </div>
         </div>
       </div>

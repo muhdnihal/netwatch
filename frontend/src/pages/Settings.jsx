@@ -8,90 +8,39 @@ function ToggleRow({ name, desc, initial }) {
         <div className="toggle-name">{name}</div>
         <div className="toggle-desc">{desc}</div>
       </div>
-      <button className={`toggle-switch ${on ? "on" : ""}`} onClick={() => setOn(!on)} />
+      <button className={`toggle-switch ${on ? "on" : ""}`}
+        onClick={() => setOn(!on)} />
     </div>
   );
 }
 
 const AWS_SERVICES = [
-  { 
-    name: "VPC Flow Logs", 
-    status: "active", 
-    region: "eu-north-1", 
-    arn: "arn:aws:logs:eu-north-1:800080992729:log-group:/netwatch/vpc-flow-logs" 
-  },
-  { 
-    name: "GuardDuty", 
-    status: "active", 
-    region: "eu-north-1", 
-    arn: "arn:aws:guardduty:eu-north-1:800080992729:detector/abc123" 
-  },
-  { 
-    name: "AWS Config", 
-    status: "active", 
-    region: "eu-north-1", 
-    arn: "arn:aws:config:eu-north-1:800080992729:config-rule/netwatch-config" 
-  },
-  { 
-    name: "Shield Standard", 
-    status: "active", 
-    region: "global", 
-    arn: "arn:aws:shield::800080992729:protection/netwatch" 
-  },
-  { 
-    name: "Amazon SQS", 
-    status: "active", 
-    region: "eu-north-1", 
-    arn: "arn:aws:sqs:eu-north-1:800080992729:netwatch-traffic-queue" 
-  },
-  { 
-    name: "CloudWatch", 
-    status: "active", 
-    region: "eu-north-1", 
-    arn: "arn:aws:cloudwatch:eu-north-1:800080992729:dashboard/NetWatch-Traffic-Monitor" 
-  },
-  { 
-    name: "AWS Lambda", 
-    status: "active", 
-    region: "eu-north-1", 
-    arn: "arn:aws:lambda:eu-north-1:800080992729:function:net-traffic-processor" 
-  },
-  { 
-    name: "Amazon SNS", 
-    status: "active", 
-    region: "eu-north-1", 
-    arn: "arn:aws:sns:eu-north-1:800080992729:netwatch-alerts" 
-  },
-  { 
-    name: "Amazon S3", 
-    status: "active", 
-    region: "eu-north-1", 
-    arn: "arn:aws:s3:::netwatch-flow-logs-nihal-2026" 
-  },
-  { 
-    name: "Amazon Athena", 
-    status: "active", 
-    region: "eu-north-1", 
-    arn: "arn:aws:athena:eu-north-1:800080992729:workgroup/netwatch" 
-  },
-  { 
-    name: "AWS CloudFront", 
-    status: "active", 
-    region: "global", 
-    arn: "arn:aws:cloudfront::800080992729:distribution/ADD-AFTER-CREATED" 
-  },
-  { 
-    name: "API Gateway", 
-    status: "active", 
-    region: "eu-north-1", 
-    arn: "arn:aws:apigateway:eu-north-1::/restapis/ADD-AFTER-CREATED" 
-  },
-  { 
-    name: "DynamoDB", 
-    status: "active", 
-    region: "eu-north-1", 
-    arn: "arn:aws:dynamodb:eu-north-1:800080992729:table/netwatch-traffic-logs" 
-  },
+  { name: "VPC Flow Logs",    status: "active", region: "eu-north-1",
+    arn: "arn:aws:logs:eu-north-1:800809927294:log-group:/netwatch/vpc-flow-logs" },
+  { name: "Amazon SQS",       status: "active", region: "eu-north-1",
+    arn: "arn:aws:sqs:eu-north-1:800809927294:netwatch-traffic-queue" },
+  { name: "AWS Lambda (Processor)", status: "active", region: "eu-north-1",
+    arn: "arn:aws:lambda:eu-north-1:800809927294:function:net-traffic-processor" },
+  { name: "AWS Lambda (API)", status: "active", region: "eu-north-1",
+    arn: "arn:aws:lambda:eu-north-1:800809927294:function:netwatch-api" },
+  { name: "DynamoDB",         status: "active", region: "eu-north-1",
+    arn: "arn:aws:dynamodb:eu-north-1:800809927294:table/netwatch-traffic-logs" },
+  { name: "Amazon SNS",       status: "active", region: "eu-north-1",
+    arn: "arn:aws:sns:eu-north-1:800809927294:netwatch-alerts" },
+  { name: "API Gateway",      status: "active", region: "eu-north-1",
+    arn: "arn:aws:execute-api:eu-north-1:800809927294:41ugiuyys3/prod" },
+  { name: "CloudWatch",       status: "active", region: "eu-north-1",
+    arn: "arn:aws:cloudwatch:eu-north-1:800809927294:dashboard/NetWatch-Traffic-Monitor" },
+  { name: "Amazon S3 (Logs)", status: "active", region: "eu-north-1",
+    arn: "arn:aws:s3:::netwatch-flow-logs-nihal-2026" },
+  { name: "Amazon S3 (Frontend)", status: "active", region: "eu-north-1",
+    arn: "arn:aws:s3:::netwatch-frontend-nihal-2026" },
+  { name: "GuardDuty",        status: "active", region: "eu-north-1",
+    arn: "arn:aws:guardduty:eu-north-1:800809927294:detector/active" },
+  { name: "AWS Config",       status: "active", region: "eu-north-1",
+    arn: "arn:aws:config:eu-north-1:800809927294:config-rule/netwatch-config" },
+  { name: "AWS CloudFront",   status: "pending", region: "global",
+    arn: "arn:aws:cloudfront::800809927294:distribution/PENDING-VERIFICATION" },
 ];
 
 export default function Settings() {
@@ -107,7 +56,9 @@ export default function Settings() {
       <div className="page-header">
         <div className="breadcrumb">NetWatch <span>/</span> Settings</div>
         <div className="page-title">System <span>Configuration</span></div>
-        <div className="page-subtitle">AWS Services · Notifications · Thresholds · IAM</div>
+        <div className="page-subtitle">
+          eu-north-1 (Stockholm) · Account: 800809927294
+        </div>
       </div>
 
       <div className="grid-2 section-gap">
@@ -115,30 +66,36 @@ export default function Settings() {
         <div className="card">
           <div className="card-header">
             <div className="card-title">AWS Configuration</div>
-            <div className="card-badge live">Connected</div>
+            <div className="card-badge live">Connected ✅</div>
           </div>
           <div className="form-group">
             <label className="form-label">AWS Region</label>
             <select className="form-select">
+              <option>eu-north-1 (Stockholm) ← YOUR REGION</option>
               <option>us-east-1 (N. Virginia)</option>
-              <option>us-west-2 (Oregon)</option>
-              <option>eu-west-1 (Ireland)</option>
-              <option>ap-southeast-1 (Singapore)</option>
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">VPC ID</label>
-            <input className="form-input" defaultValue="vpc-0a1b2c3d4e5f67890" />
+            <label className="form-label">Account ID</label>
+            <input className="form-input"
+              defaultValue="800809927294" readOnly />
           </div>
           <div className="form-group">
-            <label className="form-label">S3 Bucket (Flow Logs)</label>
-            <input className="form-input" defaultValue="netwatch-flow-logs-bucket" />
+            <label className="form-label">SQS Queue URL</label>
+            <input className="form-input"
+              defaultValue="https://sqs.eu-north-1.amazonaws.com/800809927294/netwatch-traffic-queue" />
           </div>
           <div className="form-group">
-            <label className="form-label">CloudWatch Log Group</label>
-            <input className="form-input" defaultValue="/aws/vpc/flow-logs" />
+            <label className="form-label">S3 Flow Logs Bucket</label>
+            <input className="form-input"
+              defaultValue="netwatch-flow-logs-nihal-2026" />
           </div>
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div className="form-group">
+            <label className="form-label">API Gateway URL</label>
+            <input className="form-input"
+              defaultValue="https://41ugiuyys3.execute-api.eu-north-1.amazonaws.com/prod" />
+          </div>
+          <div style={{ display:"flex", gap:"8px" }}>
             <button className="btn btn-primary" onClick={handleSave}>
               {saved ? "✓ Saved!" : "Save Changes"}
             </button>
@@ -152,24 +109,32 @@ export default function Settings() {
             <div className="card-title">Alert Thresholds</div>
           </div>
           <div className="form-group">
-            <label className="form-label">Traffic Spike Threshold (GB/s)</label>
-            <input className="form-input" type="number" defaultValue="5" />
+            <label className="form-label">
+              Traffic Spike Threshold (bytes)
+            </label>
+            <input className="form-input" type="number"
+              defaultValue="10000000" />
           </div>
           <div className="form-group">
-            <label className="form-label">Failed Auth Attempts (per minute)</label>
-            <input className="form-input" type="number" defaultValue="100" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Latency Threshold (ms)</label>
-            <input className="form-input" type="number" defaultValue="200" />
+            <label className="form-label">
+              Failed Auth Attempts (per batch)
+            </label>
+            <input className="form-input" type="number"
+              defaultValue="100" />
           </div>
           <div className="form-group">
             <label className="form-label">SNS Topic ARN</label>
-            <input className="form-input" defaultValue="arn:aws:sns:us-east-1:123456789:netwatch-alerts" />
+            <input className="form-input"
+              defaultValue="arn:aws:sns:eu-north-1:800809927294:netwatch-alerts" />
           </div>
           <div className="form-group">
-            <label className="form-label">Alert Email</label>
-            <input className="form-input" type="email" defaultValue="admin@example.com" />
+            <label className="form-label">DynamoDB Table</label>
+            <input className="form-input"
+              defaultValue="netwatch-traffic-logs" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Athena Database</label>
+            <input className="form-input" defaultValue="netwatch_db" />
           </div>
           <button className="btn btn-primary" onClick={handleSave}>
             {saved ? "✓ Saved!" : "Update Thresholds"}
@@ -182,23 +147,49 @@ export default function Settings() {
         <div className="card-header">
           <div className="card-title">Monitoring Features</div>
         </div>
-        <ToggleRow name="VPC Flow Log Capture" desc="Capture all inbound/outbound traffic via S3 + CloudWatch" initial={true} />
-        <ToggleRow name="GuardDuty Threat Detection" desc="AI-powered threat intelligence and anomaly detection" initial={true} />
-        <ToggleRow name="Real-time Kinesis Stream" desc="Sub-second latency log streaming via Kinesis Data Firehose" initial={true} />
-        <ToggleRow name="SNS Alert Notifications" desc="Send email/SMS alerts on threshold breach via Amazon SNS" initial={true} />
-        <ToggleRow name="CloudFront Access Logging" desc="Log all CDN requests for geo and user analysis" initial={true} />
-        <ToggleRow name="Lambda Auto-Remediation" desc="Auto-invoke Lambda to block IPs on critical threat detection" initial={false} />
-        <ToggleRow name="Macie Data Sensitivity Scan" desc="Scan S3 log buckets for PII and sensitive data exposure" initial={false} />
-        <ToggleRow name="Security Hub Aggregation" desc="Centralize findings from all security services in Security Hub" initial={true} />
+        <ToggleRow
+          name="SQS Traffic Queue"
+          desc="Receive VPC flow log messages via netwatch-traffic-queue"
+          initial={true} />
+        <ToggleRow
+          name="Lambda Processing"
+          desc="net-traffic-processor Lambda processes SQS messages"
+          initial={true} />
+        <ToggleRow
+          name="DynamoDB Storage"
+          desc="Store all processed logs in netwatch-traffic-logs table"
+          initial={true} />
+        <ToggleRow
+          name="SNS Alert Notifications"
+          desc="Send email alerts on threat detection via Amazon SNS"
+          initial={true} />
+        <ToggleRow
+          name="GuardDuty Threat Detection"
+          desc="AI-powered threat intelligence in eu-north-1"
+          initial={true} />
+        <ToggleRow
+          name="AWS Config Compliance"
+          desc="Record all resource configuration changes"
+          initial={true} />
+        <ToggleRow
+          name="CloudWatch Metrics"
+          desc="Push BytesProcessed and LogRecordsProcessed metrics"
+          initial={true} />
+        <ToggleRow
+          name="CloudFront CDN"
+          desc="Pending account verification — will enable soon"
+          initial={false} />
       </div>
 
       {/* AWS Services Status */}
       <div className="card section-gap">
         <div className="card-header">
-          <div className="card-title">Connected AWS Services ({AWS_SERVICES.length})</div>
-          <div className="card-badge live">All Systems Operational</div>
+          <div className="card-title">
+            Connected AWS Services ({AWS_SERVICES.length})
+          </div>
+          <div className="card-badge live">eu-north-1 Stockholm</div>
         </div>
-        <div className="table-scroll" style={{ maxHeight: "320px" }}>
+        <div className="table-scroll" style={{ maxHeight:"380px" }}>
           <table className="log-table">
             <thead>
               <tr>
@@ -211,12 +202,18 @@ export default function Settings() {
             <tbody>
               {AWS_SERVICES.map((s, i) => (
                 <tr key={i}>
-                  <td style={{ color: "var(--accent-cyan)", fontWeight: "700" }}>{s.name}</td>
+                  <td style={{ color:"var(--accent-cyan)",
+                               fontWeight:"700" }}>{s.name}</td>
                   <td>{s.region}</td>
                   <td>
-                    <span className="action-tag ALLOW">● {s.status}</span>
+                    <span className={`action-tag ${
+                      s.status === "active" ? "ALLOW" : "MONITOR"
+                    }`}>
+                      ● {s.status}
+                    </span>
                   </td>
-                  <td style={{ fontSize: "10px", color: "var(--text-muted)" }}>{s.arn}</td>
+                  <td style={{ fontSize:"10px",
+                               color:"var(--text-muted)" }}>{s.arn}</td>
                 </tr>
               ))}
             </tbody>
@@ -224,12 +221,43 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Danger Zone */}
-      <div className="card" style={{ borderColor: "rgba(255,51,102,0.2)" }}>
+      {/* How to send test data */}
+      <div className="card section-gap"
+        style={{ borderColor:"rgba(0,212,255,0.2)" }}>
         <div className="card-header">
-          <div className="card-title" style={{ color: "var(--accent-red)" }}>Danger Zone</div>
+          <div className="card-title" style={{ color:"var(--accent-cyan)" }}>
+            How to Generate Real Monitoring Data
+          </div>
         </div>
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <div style={{ fontSize:"12px", color:"var(--text-secondary)",
+                      lineHeight:"2" }}>
+          <div>1. Go to <strong style={{ color:"var(--accent-cyan)" }}>
+            AWS Console → SQS → netwatch-traffic-queue
+          </strong></div>
+          <div>2. Click <strong>"Send and receive messages"</strong></div>
+          <div>3. Paste this in message body and click Send:</div>
+          <div className="code-snippet" style={{
+            background:"var(--bg-deep)", padding:"10px",
+            borderRadius:"6px", fontFamily:"monospace",
+            fontSize:"11px", marginTop:"8px",
+            border:"1px solid var(--border-dim)"
+          }}>
+            {`{"srcaddr":"192.168.1.1","dstaddr":"10.0.0.1","srcport":1234,"dstport":443,"protocol":"TCP","bytes":9000,"action":"ALLOW"}`}
+          </div>
+          <div style={{ marginTop:"8px" }}>
+            4. Wait 30 seconds → Dashboard and Flow Logs will update automatically!
+          </div>
+        </div>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="card"
+        style={{ borderColor:"rgba(255,51,102,0.2)" }}>
+        <div className="card-header">
+          <div className="card-title"
+            style={{ color:"var(--accent-red)" }}>Danger Zone</div>
+        </div>
+        <div style={{ display:"flex", gap:"10px", flexWrap:"wrap" }}>
           <button className="btn btn-danger">Reset All Alerts</button>
           <button className="btn btn-danger">Clear Flow Log Cache</button>
           <button className="btn btn-danger">Disable All Monitoring</button>

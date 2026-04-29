@@ -1,86 +1,110 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { fetchAlerts } from "../utils/api";
 
-const ALERTS = [
+const STATIC_ALERTS = [
   {
     id: 1, sev: "critical", icon: "🚨",
-    title: "DDoS Attack Detected",
-    desc: "High-volume SYN flood from 192.168.0.0/16 targeting port 443. AWS Shield Advanced activated.",
-    source: "IP: 192.168.44.12", service: "Shield Advanced",
-    time: "2 min ago", status: "active"
+    title: "GuardDuty — Monitoring Active",
+    desc: "AWS GuardDuty is actively monitoring your VPC in eu-north-1 (Stockholm) for threats.",
+    source: "Region: eu-north-1", service: "GuardDuty",
+    time: "Live", status: "active"
   },
   {
-    id: 2, sev: "critical", icon: "🔴",
-    title: "Brute Force SSH Attempt",
-    desc: "1,240 failed SSH login attempts detected in 60s from 45.33.32.156. EC2 instance i-0abc123.",
-    source: "IP: 45.33.32.156", service: "GuardDuty",
-    time: "8 min ago", status: "active"
+    id: 2, sev: "info", icon: "ℹ",
+    title: "SQS Queue — Processing Traffic Logs",
+    desc: "netwatch-traffic-queue is actively receiving and processing VPC flow log messages.",
+    source: "Queue: netwatch-traffic-queue", service: "SQS",
+    time: "Live", status: "active"
   },
   {
-    id: 3, sev: "warning", icon: "⚠",
-    title: "Unusual Data Exfiltration",
-    desc: "Outbound traffic spike: 4.7 GB transferred to 203.0.113.0/24 outside normal business hours.",
-    source: "VPC: vpc-0abc", service: "Macie",
-    time: "22 min ago", status: "investigating"
+    id: 3, sev: "info", icon: "ℹ",
+    title: "AWS Config — Compliance Recording",
+    desc: "AWS Config is recording all resource configuration changes in your account.",
+    source: "Recorder: netwatch-config-recorder", service: "AWS Config",
+    time: "Live", status: "active"
   },
   {
-    id: 4, sev: "warning", icon: "🟠",
-    title: "Security Group Misconfiguration",
-    desc: "Port 0.0.0.0/0 is open on sg-0def456. Inbound traffic from all IPs allowed on port 8080.",
-    source: "SG: sg-0def456", service: "Security Hub",
-    time: "1 hr ago", status: "investigating"
+    id: 4, sev: "resolved", icon: "✅",
+    title: "Lambda — Handler Fixed",
+    desc: "net-traffic-processor and netwatch-api Lambda functions are running correctly.",
+    source: "Region: eu-north-1", service: "Lambda",
+    time: "Today", status: "resolved"
   },
   {
-    id: 5, sev: "info", icon: "ℹ",
-    title: "CloudFront Geo-Restriction Triggered",
-    desc: "403 responses issued for 2,841 requests from restricted regions (CN, RU, KP).",
-    source: "Distribution: E1ABCDEF", service: "CloudFront",
-    time: "2 hr ago", status: "active"
-  },
-  {
-    id: 6, sev: "resolved", icon: "✅",
-    title: "Lambda Throttling Resolved",
-    desc: "net-traffic-processor Lambda throttled for 4 minutes. Concurrency limit increased to 500.",
-    source: "Function: net-traffic-processor", service: "Lambda",
-    time: "4 hr ago", status: "resolved"
-  },
-  {
-    id: 7, sev: "resolved", icon: "✅",
-    title: "WAF Rule Triggered & Mitigated",
-    desc: "SQLi attempt blocked by WAF rule group. 847 malformed requests dropped automatically.",
-    source: "WebACL: netwatch-acl", service: "WAF",
-    time: "6 hr ago", status: "resolved"
+    id: 5, sev: "resolved", icon: "✅",
+    title: "DynamoDB — Storing Real Logs",
+    desc: "netwatch-traffic-logs table is receiving and storing real VPC flow log records.",
+    source: "Table: netwatch-traffic-logs", service: "DynamoDB",
+    time: "Today", status: "resolved"
   },
 ];
 
-const SEV_LABELS = { critical: "CRITICAL", warning: "WARNING", info: "INFO", resolved: "RESOLVED" };
+const SEV_LABELS = {
+  critical: "CRITICAL",
+  warning:  "WARNING",
+  info:     "INFO",
+  resolved: "RESOLVED"
+};
 
 export default function Alerts() {
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter]           = useState("all");
+  const [guarddutyAlerts, setGuarddutyAlerts] = useState([]);
+  const [loading, setLoading]         = useState(true);
 
-  const filtered = filter === "all" ? ALERTS : ALERTS.filter(a => a.sev === filter);
+  useEffect(() => {
+    const load = async () => {
+      const findings = await fetchAlerts();
+      const mapped = findings.map((f, i) => ({
+        id:      `gd-${i}`,
+        sev:     f.severity >= 7 ? "critical" : f.severity >= 4 ? "warning" : "info",
+        icon:    f.severity >= 7 ? "🚨" : f.severity >= 4 ? "⚠" : "ℹ",
+        title:   f.title || "GuardDuty Finding",
+        desc:    f.description || "",
+        source:  `Region: ${f.region || "eu-north-1"}`,
+        service: "GuardDuty",
+        time:    f.created ? f.created.split("T")[0] : "Recent",
+        status:  "active"
+      }));
+      setGuarddutyAlerts(mapped);
+      setLoading(false);
+    };
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const allAlerts = [...guarddutyAlerts, ...STATIC_ALERTS];
+  const filtered  = filter === "all"
+    ? allAlerts
+    : allAlerts.filter(a => a.sev === filter);
+
+  const counts = {
+    critical: allAlerts.filter(a => a.sev === "critical").length,
+    warning:  allAlerts.filter(a => a.sev === "warning").length,
+    info:     allAlerts.filter(a => a.sev === "info").length,
+    resolved: allAlerts.filter(a => a.sev === "resolved").length,
+  };
 
   return (
     <div>
       <div className="page-header">
         <div className="breadcrumb">NetWatch <span>/</span> Alerts</div>
         <div className="page-title">Alert <span>Center</span></div>
-        <div className="page-subtitle">AWS GuardDuty · Shield · SecurityHub · Macie · WAF</div>
+        <div className="page-subtitle">
+          GuardDuty · SQS · Lambda · AWS Config · eu-north-1
+        </div>
       </div>
 
-      {/* Summary stats */}
       <div className="grid-4 section-gap">
         {[
-          { label: "Critical", count: 2, color: "red" },
-          { label: "Warning", count: 2, color: "orange" },
-          { label: "Info", count: 1, color: "cyan" },
-          { label: "Resolved", count: 2, color: "green" },
-        ].map((s) => (
-          <div
-            key={s.label}
-            className={`stat-card ${s.color}`}
+          { label: "Critical", count: counts.critical, color: "red"    },
+          { label: "Warning",  count: counts.warning,  color: "orange" },
+          { label: "Info",     count: counts.info,     color: "cyan"   },
+          { label: "Resolved", count: counts.resolved, color: "green"  },
+        ].map(s => (
+          <div key={s.label} className={`stat-card ${s.color}`}
             style={{ cursor: "pointer" }}
-            onClick={() => setFilter(s.label.toLowerCase())}
-          >
+            onClick={() => setFilter(s.label.toLowerCase())}>
             <div className="stat-label">{s.label} Alerts</div>
             <div className="stat-value">{s.count}</div>
             <div className="stat-sub">Click to filter</div>
@@ -88,30 +112,28 @@ export default function Alerts() {
         ))}
       </div>
 
-      {/* Filter tabs */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-        {["all", "critical", "warning", "info", "resolved"].map(f => (
-          <button
-            key={f}
+      <div style={{ display:"flex", gap:"8px", marginBottom:"16px",
+                    flexWrap:"wrap" }}>
+        {["all","critical","warning","info","resolved"].map(f => (
+          <button key={f}
             className={`btn ${filter === f ? "btn-primary" : "btn-outline"}`}
-            style={{ padding: "6px 14px", fontSize: "11px" }}
-            onClick={() => setFilter(f)}
-          >
+            style={{ padding:"6px 14px", fontSize:"11px" }}
+            onClick={() => setFilter(f)}>
             {f.toUpperCase()}
           </button>
         ))}
-        <button
-          className="btn btn-outline"
-          style={{ marginLeft: "auto", fontSize: "11px", padding: "6px 14px" }}
-        >
-          ↓ Export CSV
-        </button>
+        <div style={{ marginLeft:"auto", fontSize:"11px",
+                      color:"var(--text-muted)", alignSelf:"center" }}>
+          {loading ? "Loading GuardDuty..." : `${guarddutyAlerts.length} GuardDuty findings`}
+        </div>
       </div>
 
       <div className="card">
         <div className="card-header">
-          <div className="card-title">Active Incidents — {filtered.length} shown</div>
-          <div className="card-badge warn">SNS Notifications On</div>
+          <div className="card-title">
+            Active Incidents — {filtered.length} shown
+          </div>
+          <div className="card-badge live">● Real AWS Data</div>
         </div>
         <div className="alert-list">
           {filtered.map(a => (
@@ -119,15 +141,17 @@ export default function Alerts() {
               <div className="alert-icon">{a.icon}</div>
               <div className="alert-body">
                 <div className="alert-title">
-                  {a.title}
-                  {" "}
-                  <span className={`sev-badge ${a.sev}`}>{SEV_LABELS[a.sev]}</span>
+                  {a.title}{" "}
+                  <span className={`sev-badge ${a.sev}`}>
+                    {SEV_LABELS[a.sev]}
+                  </span>
                 </div>
                 <div className="alert-desc">{a.desc}</div>
                 <div className="alert-meta">
                   <span>🔹 {a.source}</span>
                   <span>🛠 {a.service}</span>
-                  <span style={{ color: a.status === "resolved" ? "var(--accent-green)" : "var(--accent-orange)" }}>
+                  <span style={{ color: a.status === "resolved"
+                    ? "var(--accent-green)" : "var(--accent-orange)" }}>
                     ● {a.status}
                   </span>
                 </div>
@@ -135,6 +159,12 @@ export default function Alerts() {
               <div className="alert-time">{a.time}</div>
             </div>
           ))}
+          {filtered.length === 0 && (
+            <div className="empty-state">
+              <div className="icon">✅</div>
+              No alerts in this category
+            </div>
+          )}
         </div>
       </div>
     </div>
